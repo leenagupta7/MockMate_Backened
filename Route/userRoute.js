@@ -17,7 +17,6 @@ async function hashPassword(password) {
         console.log(error);
     }
 }
-
 router.post('/signup', async (req, res) => {
     console.log(req.body);
     const { name, college, techStack, email, password, bio } = req.body;
@@ -51,10 +50,10 @@ router.post('/signup', async (req, res) => {
                 user.sender.push(newUser._id);
                 newUser.request.push(user._id);
                 await user.save();
-                await newUser.save();
+
             }
         }));
-
+        await newUser.save();
         // Generate JWT token
         const data = {
             user: {
@@ -68,14 +67,13 @@ router.post('/signup', async (req, res) => {
         res.json({
             success: true,
             token,
-            data
+            newUser
         });
     } catch (error) {
         console.log(error);
         res.status(500).json({ message: 'Server error', details: error });
     }
 });
-
 router.post('/login', async (req, res) => {
     const { email, password } = req.body;
     try {
@@ -95,7 +93,7 @@ router.post('/login', async (req, res) => {
             };
 
             const token = jwt.sign(data, process.env.secret_key);
-            res.json({ success: true, token, data });
+            res.json({ success: true, token, found });
         } else {
             res.status(401).json({ message: 'Invalid credentials' });
         }
@@ -104,7 +102,6 @@ router.post('/login', async (req, res) => {
         res.status(500).json({ message: 'Server error', details: error });
     }
 });
-
 router.get('/getUser',async(req,res)=>{
     try{
         const data = await User.find()
@@ -113,4 +110,60 @@ router.get('/getUser',async(req,res)=>{
         res.json({err});
     }
 })
+router.get('/authUser', fetchUser, async (req, res) => {
+    try {
+      const user = await User.findById(req.user.id);
+      if (!user) return res.status(404).send('User not found');
+      res.json(user);
+    } catch (error) {
+      res.status(500).send('Server error');
+    }
+});
+
+router.post('/handleRequest', fetchUser, async (req, res) => {
+    const { id } = req.body;
+    const userId = req.user.id;
+
+    try {
+       
+        await User.updateOne(
+            { _id: userId },
+            { $addToSet: { request: id } }
+        );
+
+        await User.updateOne(
+            { _id: id },
+            { $addToSet: { sender: userId } }
+        );
+
+        res.status(200).json({ message: 'Request handled successfully' });
+    } catch (error) {
+        console.error('Error handling request:', error);
+        res.status(500).json({ message: 'Server error', details: error });
+    }
+});
+
+router.post('/handlebackRequest', fetchUser, async (req, res) => {
+    const { id } = req.body;
+    const userId = req.user.id;
+
+    try {
+       
+        await User.updateOne(
+            { _id: userId },
+            { $pull: { request: id } }
+        );
+
+        await User.updateOne(
+            { _id: id },
+            { $pull: { sender: userId } }
+        );
+
+        res.status(200).json({ message: 'Request handled successfully' });
+    } catch (error) {
+        console.error('Error handling request:', error);
+        res.status(500).json({ message: 'Server error', details: error });
+    }
+});
+
 module.exports = router;
